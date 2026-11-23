@@ -1,0 +1,976 @@
+<!DOCTYPE html><html lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>半径旋转 · 生成正五边形与五角星 | 动态几何演示</title>
+<style>
+:root{
+  --gold:#ffd166;
+  --cyan:#5ee0d8;
+  --blue:#7cb3ff;
+  --text:#e8eefc;
+  --dim:#8b9ac0;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{
+  font-family:"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,-apple-system,sans-serif;
+  background:#04070f;
+  color:var(--text);
+  overflow:hidden;
+  display:grid;
+  place-items:center;
+  -webkit-font-smoothing:antialiased;
+}
+/* 舞台严格 16:9，窗口不匹配时四周留黑边 */
+.app{
+  width:min(100vw, calc(100vh * 16 / 9));
+  height:min(100vh, calc(100vw * 9 / 16));
+  display:flex;flex-direction:column;
+  padding:14px 18px 12px;gap:11px;
+  overflow:hidden;
+  background:radial-gradient(120% 120% at 15% -10%, #17233f 0%, #0a1020 45%, #05070e 100%);
+}
+@supports (height:100dvh){
+  .app{
+    width:min(100vw, calc(100dvh * 16 / 9));
+    height:min(100dvh, calc(100vw * 9 / 16));
+  }
+}
+
+/* ---------- 顶部 ---------- */
+.top{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex:0 0 auto}
+.top h1{font-size:22px;font-weight:600;letter-spacing:.3px}
+.top p{font-size:15.5px;color:var(--dim);margin-top:5px;line-height:1.55}
+.top p b{color:var(--gold);font-weight:600}
+.badge{
+  font-size:14px;padding:7px 14px;border-radius:999px;white-space:nowrap;
+  background:rgba(94,224,216,.10);border:1px solid rgba(94,224,216,.3);color:#9df0ea;
+}
+
+/* ---------- 主体 ---------- */
+main{flex:1 1 auto;display:grid;grid-template-columns:1fr 336px;gap:12px;min-height:0}
+.stage{
+  position:relative;border-radius:16px;overflow:hidden;
+  min-width:0;min-height:0;
+  border:1px solid rgba(124,163,255,.12);
+  background:radial-gradient(circle at 50% 42%, rgba(26,42,76,.50), rgba(6,10,20,.60));
+}
+/* 画布脱离文档流，尺寸完全由容器决定，避免反过来撑大舞台 */
+canvas{display:block;position:absolute;top:0;left:0}
+
+.panel{display:flex;flex-direction:column;gap:10px;overflow-y:auto;padding-right:2px}
+.panel::-webkit-scrollbar{width:6px}
+.panel::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:3px}
+
+.card{background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:15px 17px}
+
+.hero .lab{font-size:14.5px;color:var(--dim);letter-spacing:.5px}
+.hero .big{
+  font-family:var(--mono);font-size:47px;font-weight:700;color:var(--gold);
+  line-height:1.12;margin:4px 0 2px;text-shadow:0 0 26px rgba(255,209,102,.35);
+  transition:color .25s;
+}
+.hero .big.bad{color:#ff9b9b;text-shadow:0 0 26px rgba(255,107,107,.3)}
+.hero .sub{font-size:14.5px;color:var(--dim);font-family:var(--mono);line-height:1.5}
+.hero .verdict{
+  margin-top:11px;font-size:15px;padding:8px 11px;border-radius:9px;text-align:center;font-weight:600;
+  background:rgba(94,224,216,.10);border:1px solid rgba(94,224,216,.28);color:#9df0ea;
+  transition:.25s;
+}
+.hero .verdict.bad{background:rgba(255,107,107,.10);border-color:rgba(255,107,107,.30);color:#ff9b9b}
+
+.rows .row{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:15.5px;padding:6.5px 0;border-bottom:1px dashed rgba(255,255,255,.07)}
+.rows .row:last-child{border-bottom:none;padding-bottom:0}
+.rows .row:first-child{padding-top:0}
+.row span{color:var(--dim)}
+.row b{font-family:var(--mono);font-weight:600;color:#dce8ff;font-size:16.5px;white-space:nowrap}
+
+.note{font-size:15px;line-height:1.75;color:#9fb0d4}
+.note em{color:var(--gold);font-style:normal;font-weight:600}
+
+/* ---------- 控制条 ---------- */
+.bar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;flex:0 0 auto;justify-content:flex-end}
+.btn{
+  appearance:none;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);
+  color:#dbe6ff;padding:10px 17px;border-radius:999px;font-size:16px;cursor:pointer;
+  transition:background .16s,border-color .16s,transform .1s;font-family:inherit;
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap;
+}
+.btn:hover{background:rgba(255,255,255,.13);border-color:rgba(255,255,255,.26)}
+.btn:active{transform:scale(.97)}
+.btn.primary{
+  background:linear-gradient(135deg,#ffd97a,#ffb02e);border-color:transparent;color:#2a1c00;
+  font-weight:700;box-shadow:0 6px 20px rgba(255,176,46,.28);
+}
+.btn.on{background:rgba(94,224,216,.16);border-color:rgba(94,224,216,.5);color:#9df0ea;font-weight:600}
+.btn.icon{padding:10px 15px;font-size:17px}
+
+.divider{width:1px;height:22px;background:rgba(255,255,255,.12);margin:0 3px}
+
+.slider{display:flex;align-items:center;gap:9px;font-size:15.5px;color:var(--dim)}
+.slider b{font-family:var(--mono);color:var(--gold);min-width:52px;text-align:right;font-size:16px}
+input[type=range]{
+  -webkit-appearance:none;appearance:none;width:140px;height:4px;border-radius:3px;
+  background:linear-gradient(90deg,#5ee0d8,#7cb3ff,#ffd166);outline:none;cursor:pointer;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#fff;
+  border:2px solid var(--gold);cursor:pointer;box-shadow:0 0 10px rgba(255,209,102,.65);
+}
+input[type=range]::-moz-range-thumb{
+  width:14px;height:14px;border-radius:50%;background:#fff;border:2px solid var(--gold);
+  cursor:pointer;box-shadow:0 0 10px rgba(255,209,102,.65);
+}
+
+.presets{display:flex;gap:6px}
+.chip{
+  appearance:none;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);
+  color:#a8b8d8;font-size:14px;padding:7px 12px;border-radius:999px;cursor:pointer;
+  font-family:inherit;transition:.16s;white-space:nowrap;
+}
+.chip:hover{color:#dbe6ff;border-color:rgba(255,255,255,.24)}
+.chip.active{background:rgba(255,209,102,.14);border-color:rgba(255,209,102,.45);color:var(--gold);font-weight:600}
+
+/* 舞台较窄时改为上下分区（由 JS 按舞台实际宽度切换，而不是按视口） */
+.app.compact main{grid-template-columns:1fr;grid-template-rows:minmax(140px,1fr) 148px}
+.app.compact .panel{flex-direction:row;align-items:stretch;height:168px;overflow-x:auto;overflow-y:hidden}
+/* 窄舞台（如 1024×768 老投影）：控制条字号降一档，避免按钮换行把画布压扁 */
+.app.narrow .btn{font-size:14px;padding:8px 12px}
+.app.narrow .btn.icon{padding:8px 11px;font-size:15px}
+.app.narrow .chip{font-size:12.5px;padding:6px 10px}
+.app.narrow .slider{font-size:13.5px;gap:7px}
+.app.narrow .slider b{min-width:46px;font-size:14px}
+.app.narrow input[type=range]{width:92px}
+.app.compact .card{min-height:0;overflow:auto}
+.app.compact .card{min-width:200px;flex:0 0 auto;padding:9px 11px;overflow:hidden}
+.app.compact .note{display:none}
+.app.compact .hero .big{font-size:30px;margin:2px 0}
+.app.compact .hero .verdict{margin-top:6px;padding:5px 9px;font-size:13.5px}
+.app.compact .rows .row{padding:4px 0;font-size:14px}
+.app.compact input[type=range]{width:104px}
+.app.compact .top p{display:none}
+</style>
+<meta name="AIGC" content="{&#34;AIGC&#34;:{&#34;Label&#34;:&#34;1&#34;,&#34;ContentProducer&#34;:&#34;001191340000711771143J00000&#34;,&#34;ProduceID&#34;:&#34;4b947ffa879a935839d272b37c52d62be5072df626502a8425454ffeb1d95dd2&#34;,&#34;ReservedCode1&#34;:&#34;&#34;,&#34;ContentPropagator&#34;:&#34;001191340000711771143J00000&#34;,&#34;PropagateID&#34;:&#34;4b947ffa879a935839d272b37c52d62be5072df626502a8425454ffeb1d95dd2&#34;,&#34;ReservedCode2&#34;:&#34;&#34;}}"/></head>
+<body>
+<div class="app">
+
+  <header class="top">
+    <div>
+      <h1>半径绕圆心旋转 · 生成正五边形与五角星</h1>
+      <p>半径每旋转 <b>72°</b> 落下一个顶点，五次正好回到起点；实时测算对角线与边长之比 d / a</p>
+    </div>
+    <div class="badge">AI 融合 · 动态几何验证</div>
+  </header>
+
+  <main>
+    <div class="stage"><canvas id="cv"></canvas></div>
+
+    <aside class="panel">
+      <div class="card hero">
+        <div class="lab">对角线与边长之比  d / a</div>
+        <div class="big" id="ratio">1.618034</div>
+        <div class="sub" id="ratioSub">φ = (1+√5)/2 = 1.618034</div>
+        <div class="verdict" id="verdict">✓ d / a = φ，恒定不变</div>
+      </div>
+
+      <div class="card rows">
+        <div class="row"><span>旋转角 θ</span><b id="vTheta">72°</b></div>
+        <div class="row"><span>顶点数 n</span><b id="vN">5</b></div>
+        <div class="row"><span>边长 a（R=1）</span><b id="vA">1.175571</b></div>
+        <div class="row"><span>对角线 d（R=1）</span><b id="vD">1.902113</b></div>
+        <div class="row"><span>闭合状态</span><b id="vClose">已闭合</b></div>
+      </div>
+
+      <div class="card note" id="note">
+        半径每旋转 <em>72°</em> 落下一个顶点，5 次累计 360° 回到起点，正五边形闭合。
+        此时隔一个顶点连线即五角星，其对角线 d 与边长 a 之比恒为 <em>2cos36° = φ ≈ 1.618</em>。
+        把旋转角改成 60°、90°，图形便不再与 φ 相关。
+      </div>
+    </aside>
+  </main>
+
+  <footer class="bar">
+    <button id="btnPlay" class="btn primary">▶ 播放</button>
+    <button id="btnStep" class="btn">▸ 单步旋转</button>
+    <button id="btnReset" class="btn">⟳ 重置</button>
+    <button id="btnLoop" class="btn on" title="演示结束后自动从头开始">🔁 循环播放</button>
+
+    <div class="divider"></div>
+
+    <div class="slider">
+      <span>旋转角</span>
+      <input id="rng" type="range" min="40" max="120" step="1" value="72"/>
+      <b id="rngVal">72°</b>
+    </div>
+
+    <div class="presets">
+      <button class="chip active" data-theta="72">72° 五角星</button>
+      <button class="chip" data-theta="60">60°</button>
+      <button class="chip" data-theta="90">90°</button>
+      <button class="chip" data-theta="120">120°</button>
+    </div>
+
+    <button id="btnFull" class="btn icon" title="全屏演示">⛶</button>
+  </footer>
+
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ============ 基础 ============ */
+  var cv = document.getElementById('cv');
+  var ctx = cv.getContext('2d');
+  var D2R = Math.PI / 180;
+  var PHI = (1 + Math.sqrt(5)) / 2;
+  var LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  var FONT = '"PingFang SC","Microsoft YaHei",system-ui,sans-serif';
+  var MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+
+  var ROT_DUR = 1.0, DROP_DUR = 0.34, POLY_DUR = 0.9, STAR_DUR = 1.2, HOLD_DUR = 2.8;
+
+  var W = 0, H = 0, cx = 0, cy = 0, R = 0;
+
+  var S = {
+    theta: 72,
+    angle: 0,
+    fromAngle: 0,
+    toAngle: 0,
+    verts: [0],
+    spins: 0,
+    phase: 'rotating',
+    t: 0,
+    playing: false,
+    loop: true,
+    polyProg: 0,
+    starProg: 0,
+    pulses: [],
+    closedDone: false,
+    pendingSteps: 0
+  };
+
+  /* ============ 几何判定 ============ */
+  function geom(theta) {
+    var nRaw = 360 / theta;
+    var n = Math.round(nRaw);
+    var closed = Math.abs(nRaw - n) < 1e-9 && n >= 3;
+    var m = closed ? n : Math.max(Math.ceil(nRaw), 3);
+    var rotations = closed ? n : m - 1;
+    return { closed: closed, n: n, m: m, rotations: rotations, nRaw: nRaw };
+  }
+
+  /* 屏幕坐标：0° 指向正上方，角度顺时针增大 */
+  function P(deg, r) {
+    var a = deg * D2R;
+    return [cx + r * Math.sin(a), cy - r * Math.cos(a)];
+  }
+
+  function easeInOut(t) {
+    return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+  }
+
+  /* ============ 画布尺寸 ============ */
+  var appEl = document.querySelector('.app');
+  var _lastW = 0, _lastH = 0;
+  function resize() {
+    /* 舞台宽度决定紧凑布局切换（阈值不受 canvas 自身尺寸影响，避免来回抖动） */
+    if (appEl) {
+      var aw = appEl.clientWidth;
+      appEl.classList.toggle('compact', aw < 900);
+      appEl.classList.toggle('narrow', aw < 1200);
+    }
+
+    var box = document.querySelector('.stage');
+    var w = box.clientWidth, h = box.clientHeight;
+
+    /* 仅当容器尚未完成布局（尺寸为 0）时用视口兜底；容器本来就矮时必须尊重它 */
+    if (!w || w < 40) w = Math.max(document.documentElement.clientWidth - 340, 320);
+    if (!h || h < 40) h = Math.max(window.innerHeight - 150, 300);
+
+    w = Math.round(w);
+    h = Math.round(h);
+    if (w === _lastW && h === _lastH && R > 0) return;
+    _lastW = w;
+    _lastH = h;
+
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = w;
+    H = h;
+    cv.width = Math.round(W * dpr);
+    cv.height = Math.round(H * dpr);
+    cv.style.width = W + 'px';
+    cv.style.height = H + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    cx = W / 2;
+    cy = H / 2 + 4;
+    R = Math.min(W, H) * 0.38;
+  }
+
+  /* ============ 演示状态机 ============ */
+  function beginSpin() {
+    S.fromAngle = S.angle;
+    S.toAngle = S.angle + S.theta;
+    S.phase = 'rotating';
+    S.t = 0;
+  }
+
+  function enterHold() {
+    S.phase = 'hold';
+    S.t = 0;
+    if (S.pendingSteps > 0) {
+      S.pendingSteps = 0;
+      setPlaying(false);
+    }
+  }
+
+  function reset() {
+    S.angle = 0;
+    S.fromAngle = 0;
+    S.toAngle = 0;
+    S.verts = [0];
+    S.spins = 0;
+    S.polyProg = 0;
+    S.starProg = 0;
+    S.pulses = [];
+    S.closedDone = false;
+    S.pendingSteps = 0;
+    S.t = 0;
+    var g = geom(S.theta);
+    if (g.rotations > 0) {
+      beginSpin();
+    } else {
+      S.phase = 'hold';
+    }
+  }
+
+  function update(dt) {
+    var g = geom(S.theta);
+
+    if (S.phase === 'rotating') {
+      S.t += dt / ROT_DUR;
+      var p = Math.min(S.t, 1);
+      S.angle = S.fromAngle + (S.toAngle - S.fromAngle) * easeInOut(p);
+      if (p >= 1) {
+        S.angle = S.toAngle;
+        S.spins++;
+        if (g.closed && S.angle >= 360 - 1e-6) {
+          S.closedDone = true;
+          S.pulses.push({ a: 0, t: 0, big: true });
+        } else {
+          S.pulses.push({ a: S.angle, t: 0, big: false });
+          S.verts.push(S.angle);
+        }
+        S.phase = 'dropping';
+        S.t = 0;
+      }
+      return;
+    }
+
+    if (S.phase === 'dropping') {
+      S.t += dt / DROP_DUR;
+      if (S.t >= 1) {
+        if (S.spins >= g.rotations) {
+          /* 最后一次落点：必须先画完五边形和五角星，单步的暂停推迟到 hold 开始时 */
+          if (g.closed) {
+            S.phase = 'poly';
+            S.t = 0;
+          } else {
+            enterHold();
+          }
+        } else {
+          if (S.pendingSteps > 0) {
+            S.pendingSteps--;
+            if (S.pendingSteps === 0) {
+              /* 单步走完：停在这个顶点上等下一次点击 */
+              S.phase = 'paused';
+              S.t = 0;
+              setPlaying(false);
+              return;
+            }
+          }
+          beginSpin();
+        }
+      }
+      return;
+    }
+
+    if (S.phase === 'poly') {
+      S.t += dt / POLY_DUR;
+      S.polyProg = Math.min(S.t, 1);
+      if (S.t >= 1) {
+        S.phase = 'star';
+        S.t = 0;
+        S.starProg = 0;
+      }
+      return;
+    }
+
+    if (S.phase === 'star') {
+      S.t += dt / STAR_DUR;
+      S.starProg = Math.min(S.t, 1);
+      if (S.t >= 1) enterHold();
+      return;
+    }
+
+    if (S.phase === 'hold') {
+      S.t += dt;
+      if (S.t >= HOLD_DUR) {
+        if (S.loop && S.playing) {
+          reset();
+        } else {
+          S.t = HOLD_DUR;
+          setPlaying(false);
+        }
+      }
+      return;
+    }
+  }
+
+  /* ============ 绘制 ============ */
+  function starOrder(n) {
+    var used = {}, order = [], cur = 0, guard = 0;
+    while (Object.keys(used).length < n && guard++ < n * 4) {
+      if (used[cur]) {
+        var f = -1;
+        for (var i = 0; i < n; i++) { if (!used[i]) { f = i; break; } }
+        if (f < 0) break;
+        cur = f;
+      }
+      used[cur] = true;
+      order.push([cur, (cur + 2) % n]);
+      cur = (cur + 2) % n;
+    }
+    return order;
+  }
+
+  function drawProgressive(pts, order, prog) {
+    var total = 0, lens = [], i;
+    for (i = 0; i < order.length; i++) {
+      var A = pts[order[i][0]], B = pts[order[i][1]];
+      var L = Math.hypot(B[0] - A[0], B[1] - A[1]);
+      lens.push(L);
+      total += L;
+    }
+    if (total <= 0) return;
+
+    var remain = total * prog;
+    ctx.beginPath();
+    var px = null, py = null;
+
+    for (i = 0; i < order.length; i++) {
+      if (remain <= 0) break;
+      var a = pts[order[i][0]], b = pts[order[i][1]];
+      var f = lens[i] > 0 ? Math.min(1, remain / lens[i]) : 1;
+      if (px === null || Math.abs(px - a[0]) > 0.5 || Math.abs(py - a[1]) > 0.5) {
+        ctx.moveTo(a[0], a[1]);
+      }
+      var ex = a[0] + (b[0] - a[0]) * f;
+      var ey = a[1] + (b[1] - a[1]) * f;
+      ctx.lineTo(ex, ey);
+      px = ex; py = ey;
+      remain -= lens[i];
+    }
+    ctx.stroke();
+  }
+
+  function drawGuides() {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(124,163,255,.14)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([5, 7]);
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.strokeStyle = 'rgba(124,163,255,.20)';
+    for (var a = 0; a < 360; a += 30) {
+      var p1 = P(a, R - 6), p2 = P(a, R + 6);
+      ctx.beginPath();
+      ctx.moveTo(p1[0], p1[1]);
+      ctx.lineTo(p2[0], p2[1]);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawShape(g) {
+    var pts = S.verts.map(function (a) { return P(a, R); });
+    var i;
+
+    if (!g.closed) {
+      if (pts.length > 1) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(124,179,255,.55)';
+        ctx.lineWidth = 1.8;
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        for (i = 0; i < pts.length; i++) {
+          if (i) ctx.lineTo(pts[i][0], pts[i][1]);
+          else ctx.moveTo(pts[i][0], pts[i][1]);
+        }
+        ctx.stroke();
+
+        ctx.setLineDash([5, 8]);
+        ctx.strokeStyle = 'rgba(255,107,107,.6)';
+        ctx.beginPath();
+        ctx.moveTo(pts[pts.length - 1][0], pts[pts.length - 1][1]);
+        ctx.lineTo(pts[0][0], pts[0][1]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+      }
+      return;
+    }
+
+    /* 正多边形 */
+    if (S.polyProg > 0) {
+      var order = [];
+      for (i = 0; i < pts.length; i++) order.push([i, (i + 1) % pts.length]);
+      ctx.save();
+      ctx.strokeStyle = 'rgba(124,179,255,.9)';
+      ctx.lineWidth = 2.2;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      ctx.shadowColor = 'rgba(124,179,255,.55)';
+      ctx.shadowBlur = 12;
+      drawProgressive(pts, order, S.polyProg);
+      ctx.restore();
+    } else if (pts.length > 1) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(124,179,255,.45)';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      for (i = 0; i < pts.length; i++) {
+        if (i) ctx.lineTo(pts[i][0], pts[i][1]);
+        else ctx.moveTo(pts[i][0], pts[i][1]);
+      }
+      /* 顶点已全部落齐时先补上闭合边，避免出现"五点到齐却没有轮廓"的断裂画面 */
+      if (S.closedDone) ctx.lineTo(pts[0][0], pts[0][1]);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    /* 五角星 */
+    if (S.starProg > 0 && pts.length >= 4) {
+      ctx.save();
+      ctx.strokeStyle = '#ffd166';
+      ctx.lineWidth = 2.6;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      ctx.shadowColor = 'rgba(255,209,102,.75)';
+      ctx.shadowBlur = 18;
+      drawProgressive(pts, starOrder(pts.length), S.starProg);
+      ctx.restore();
+    }
+  }
+
+  function segLabel(p1, p2, text, color) {
+    var mx = (p1[0] + p2[0]) / 2, my = (p1[1] + p2[1]) / 2;
+    var dx = p2[0] - p1[0], dy = p2[1] - p1[1];
+    var L = Math.hypot(dx, dy) || 1;
+    var nx = -dy / L, ny = dx / L;
+    var ox = mx - cx, oy = my - cy;
+    var sign = (nx * ox + ny * oy) > 0 ? 1 : -1;
+    ctx.save();
+    ctx.font = '700 ' + Math.max(15, Math.round(R * 0.078)) + 'px ' + MONO;
+    ctx.fillStyle = color;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = 'rgba(0,0,0,.6)';
+    ctx.shadowBlur = 6;
+    ctx.fillText(text, mx + nx * 17 * sign, my + ny * 17 * sign);
+    ctx.restore();
+  }
+
+  function drawSegLabels() {
+    if (S.verts.length < 3) return;
+    if (S.phase !== 'hold' && S.phase !== 'star' && S.phase !== 'poly') return;
+
+    var A = P(S.verts[0], R), B = P(S.verts[1], R), C = P(S.verts[2], R);
+
+    ctx.save();
+    ctx.lineWidth = 4;
+    ctx.lineCap = 'round';
+
+    ctx.strokeStyle = 'rgba(94,224,216,.95)';
+    ctx.beginPath();
+    ctx.moveTo(A[0], A[1]);
+    ctx.lineTo(B[0], B[1]);
+    ctx.stroke();
+
+    if (S.phase !== 'poly') {
+      ctx.strokeStyle = 'rgba(255,209,102,.95)';
+      ctx.beginPath();
+      ctx.moveTo(A[0], A[1]);
+      ctx.lineTo(C[0], C[1]);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    segLabel(A, B, 'a', '#9df0ea');
+    if (S.phase !== 'poly') segLabel(A, C, 'd', '#ffd166');
+  }
+
+  function drawArc() {
+    var a1 = S.fromAngle, a2 = S.angle;
+    if (Math.abs(a2 - a1) < 0.5) return;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(94,224,216,.45)';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R * 0.30, (a1 - 90) * D2R, (a2 - 90) * D2R, false);
+    ctx.stroke();
+
+    var mid = (a1 + a2) / 2;
+    var tp = P(mid, R * 0.40);
+    ctx.font = '600 ' + Math.max(15, Math.round(R * 0.078)) + 'px ' + MONO;
+    ctx.fillStyle = 'rgba(160,245,238,.95)';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = 'rgba(0,0,0,.6)';
+    ctx.shadowBlur = 6;
+    ctx.fillText(Math.round(a2 - a1) + '°', tp[0], tp[1]);
+    ctx.restore();
+  }
+
+  function drawRadius() {
+    var p = P(S.angle, R);
+    ctx.save();
+    ctx.strokeStyle = '#5ee0d8';
+    ctx.lineWidth = 2.4;
+    ctx.lineCap = 'round';
+    ctx.shadowColor = 'rgba(94,224,216,.85)';
+    ctx.shadowBlur = 14;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(p[0], p[1]);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(p[0], p[1], 5, 0, Math.PI * 2);
+    ctx.fillStyle = '#eafffd';
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawVertices() {
+    var col = S.closedDone ? '#ffd166' : '#9fd0ff';
+    for (var i = 0; i < S.verts.length; i++) {
+      var p = P(S.verts[i], R);
+
+      ctx.beginPath();
+      ctx.arc(p[0], p[1], 8, 0, Math.PI * 2);
+      ctx.fillStyle = S.closedDone ? 'rgba(255,209,102,.16)' : 'rgba(159,208,255,.14)';
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(p[0], p[1], 4, 0, Math.PI * 2);
+      ctx.fillStyle = col;
+      ctx.fill();
+
+      var lp = P(S.verts[i], R * 1.155);
+      ctx.font = '600 ' + Math.max(15, Math.round(R * 0.086)) + 'px ' + FONT;
+      ctx.fillStyle = 'rgba(214,228,255,.88)';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(LETTERS[i] || '·', lp[0], lp[1]);
+    }
+  }
+
+  function drawCenter() {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, 1, 0, Math.PI * 2);
+    ctx.restore();
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, 3.4, 0, Math.PI * 2);
+    ctx.fillStyle = '#dfe9ff';
+    ctx.fill();
+
+    ctx.font = '600 ' + Math.max(15, Math.round(R * 0.078)) + 'px ' + MONO;
+    ctx.fillStyle = 'rgba(200,216,248,.8)';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('O', cx + 10, cy + 13);
+  }
+
+  function drawPulses() {
+    for (var i = 0; i < S.pulses.length; i++) {
+      var pu = S.pulses[i];
+      var p = P(pu.a, R);
+      var rad = 6 + pu.t * (pu.big ? 72 : 34);
+      ctx.beginPath();
+      ctx.arc(p[0], p[1], rad, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255,209,102,' + (1 - pu.t) * 0.75 + ')';
+      ctx.lineWidth = pu.big ? 3 : 2;
+      ctx.stroke();
+    }
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+
+    var grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, R * 1.7);
+    grd.addColorStop(0, 'rgba(64,116,210,.13)');
+    grd.addColorStop(1, 'rgba(64,116,210,0)');
+    ctx.fillStyle = grd;
+    ctx.fillRect(0, 0, W, H);
+
+    var g = geom(S.theta);
+
+    drawGuides();
+    drawShape(g);
+    drawSegLabels();
+    drawArc();
+    drawRadius();
+    drawVertices();
+    drawCenter();
+    drawPulses();
+  }
+
+  /* ============ 面板 ============ */
+  var elRatio = document.getElementById('ratio');
+  var elRatioSub = document.getElementById('ratioSub');
+  var elVerdict = document.getElementById('verdict');
+  var elTheta = document.getElementById('vTheta');
+  var elN = document.getElementById('vN');
+  var elA = document.getElementById('vA');
+  var elD = document.getElementById('vD');
+  var elClose = document.getElementById('vClose');
+
+  var _uiCache = {};
+  function setText(el, key, val) {
+    if (_uiCache[key] !== val) {
+      _uiCache[key] = val;
+      el.textContent = val;
+    }
+  }
+
+  function updateUI() {
+    var g = geom(S.theta);
+    var a = 2 * Math.sin(S.theta * D2R / 2);
+    var d = 2 * Math.sin(S.theta * D2R);
+    var ratio = 2 * Math.cos(S.theta * D2R / 2);
+    var diff = Math.abs(ratio - PHI);
+    var isPhi = diff < 1e-6;
+
+    setText(elTheta, 'theta', S.theta + '°');
+    setText(elN, 'n', g.closed ? String(g.n) : (g.m + '（未闭合）'));
+    setText(elA, 'a', a.toFixed(6));
+    setText(elD, 'd', d.toFixed(6));
+    setText(elRatio, 'ratio', ratio.toFixed(6));
+
+    if (_uiCache.bad !== !isPhi) {
+      _uiCache.bad = !isPhi;
+      elRatio.classList.toggle('bad', !isPhi);
+      elVerdict.classList.toggle('bad', !isPhi);
+    }
+
+    if (isPhi) {
+      setText(elRatioSub, 'sub', 'φ = (1+√5)/2 = ' + PHI.toFixed(6));
+      setText(elVerdict, 'verdict', '✓ d / a = φ，旋转过程中恒定不变');
+    } else {
+      setText(elRatioSub, 'sub', 'φ = (1+√5)/2 = ' + PHI.toFixed(6) + '　差 ' + diff.toFixed(6));
+      setText(elVerdict, 'verdict', '✗ d / a ≠ φ，仅当 θ = 72° 时等于 φ');
+    }
+
+    if (S.spins < g.rotations) {
+      setText(elClose, 'close', '旋转中 ' + S.spins + ' / ' + g.rotations);
+    } else if (!g.closed) {
+      var gap = 360 - S.verts[S.verts.length - 1];
+      setText(elClose, 'close', '✗ 未闭合（缺 ' + Math.round(gap) + '°）');
+    } else {
+      setText(elClose, 'close', '✓ ' + g.n + ' 个顶点闭合');
+    }
+  }
+
+  /* ============ 控件 ============ */
+  var btnPlay = document.getElementById('btnPlay');
+  var btnStep = document.getElementById('btnStep');
+  var btnReset = document.getElementById('btnReset');
+  var btnLoop = document.getElementById('btnLoop');
+  var btnFull = document.getElementById('btnFull');
+  var rng = document.getElementById('rng');
+  var rngVal = document.getElementById('rngVal');
+  var chips = Array.prototype.slice.call(document.querySelectorAll('.chip'));
+
+  function syncButtons() {
+    btnPlay.textContent = S.playing ? '⏸ 暂停' : '▶ 播放';
+    btnLoop.classList.toggle('on', S.loop);
+    btnLoop.textContent = S.loop ? '🔁 循环播放' : '🔁 单次播放';
+  }
+
+  function setPlaying(v) {
+    if (v) {
+      if (S.phase === 'hold' && S.t >= HOLD_DUR - 1e-6) reset();
+      else if (S.phase === 'paused') beginSpin();
+    }
+    S.playing = v;
+    syncButtons();
+  }
+
+  function snapAngle(v) {
+    var targets = [40, 45, 60, 72, 90, 120];
+    for (var i = 0; i < targets.length; i++) {
+      if (Math.abs(v - targets[i]) <= 1) return targets[i];
+    }
+    return v;
+  }
+
+  function updateChips() {
+    chips.forEach(function (c) {
+      c.classList.toggle('active', Number(c.dataset.theta) === S.theta);
+    });
+    rngVal.textContent = S.theta + '°';
+    rng.value = S.theta;
+  }
+
+  function setTheta(v, fromSlider) {
+    v = Math.round(v);
+    if (fromSlider) v = snapAngle(v);
+    if (v === S.theta) { updateChips(); return; }
+    S.theta = v;
+    reset();
+    S.playing = true;
+    syncButtons();
+    updateChips();
+    updateUI();
+  }
+
+  btnPlay.addEventListener('click', function () {
+    setPlaying(!S.playing);
+  });
+
+  btnStep.addEventListener('click', function () {
+    if (S.phase === 'poly' || S.phase === 'star') {
+      S.polyProg = 1;
+      S.starProg = 1;
+      S.phase = 'hold';
+      S.t = 0;
+      return;
+    }
+    if (S.phase === 'hold') reset();
+    if (S.phase === 'paused') beginSpin();
+    S.pendingSteps++;
+    S.playing = true;
+    syncButtons();
+  });
+
+  btnReset.addEventListener('click', function () {
+    reset();
+    setPlaying(false);
+    updateUI();
+  });
+
+  btnLoop.addEventListener('click', function () {
+    S.loop = !S.loop;
+    syncButtons();
+    if (S.loop && !S.playing && S.phase === 'hold') {
+      reset();
+      setPlaying(true);
+    }
+  });
+
+  rng.addEventListener('input', function () {
+    setTheta(Number(rng.value), true);
+  });
+
+  chips.forEach(function (c) {
+    c.addEventListener('click', function () {
+      setTheta(Number(c.dataset.theta), false);
+    });
+  });
+
+  btnFull.addEventListener('click', function () {
+    var d = document;
+    try {
+      if (!d.fullscreenElement && !d.webkitFullscreenElement) {
+        var el = d.documentElement;
+        var req = el.requestFullscreen || el.webkitRequestFullscreen;
+        if (req) req.call(el);
+      } else {
+        var exit = d.exitFullscreen || d.webkitExitFullscreen;
+        if (exit) exit.call(d);
+      }
+    } catch (err) {
+      /* 部分预览环境禁止全屏，忽略即可 */
+    }
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.code === 'Space') {
+      e.preventDefault();
+      setPlaying(!S.playing);
+    } else if (e.key === 'r' || e.key === 'R') {
+      reset();
+      setPlaying(false);
+      updateUI();
+    }
+  });
+
+  /* ============ 主循环 ============ */
+  var last = performance.now();
+  var lastTickAt = performance.now();
+
+  function tick(now) {
+    if (typeof now !== 'number') now = performance.now();
+    var dt = (now - last) / 1000;
+    last = now;
+    if (!(dt > 0)) dt = 0;
+    if (dt > 0.06) dt = 0.06;
+    lastTickAt = performance.now();
+
+    for (var i = 0; i < S.pulses.length; i++) S.pulses[i].t += dt / 0.8;
+    if (S.pulses.length) {
+      S.pulses = S.pulses.filter(function (p) { return p.t < 1; });
+    }
+
+    if (S.playing) update(dt);
+
+    draw();
+    updateUI();
+
+    requestAnimationFrame(tick);
+  }
+
+  /* 预览窗口 / 后台标签页里 rAF 可能被节流甚至完全停掉，这里做一层定时兜底 */
+  setInterval(function () {
+    var now = performance.now();
+    if (S.playing && now - lastTickAt > 400) {
+      var dt = 1 / 60;
+      lastTickAt = now;
+      last = now;
+      update(dt);
+      draw();
+      updateUI();
+    }
+  }, 60);
+
+  /* ============ 启动 ============ */
+  function boot() {
+    resize();
+    reset();
+    updateChips();
+    S.playing = true;
+    syncButtons();
+    updateUI();
+    requestAnimationFrame(tick);
+  }
+
+  if (window.ResizeObserver) {
+    new ResizeObserver(function () { resize(); }).observe(document.querySelector('.stage'));
+  } else {
+    window.addEventListener('resize', resize);
+  }
+
+  boot();
+})();
+</script>
+
+
+<p id="aigc-visible-label" data-aigc-label="v1" role="note" style="display:block!important;visibility:visible!important;opacity:1!important;position:static!important;color:#808080!important;background:transparent!important;border:0!important;font:10px/1.3 sans-serif!important;text-align:right!important;padding:0!important;margin:4px 0 0!important;height:auto!important;max-height:none!important;overflow:visible!important;">AI生成</p></body></html>
